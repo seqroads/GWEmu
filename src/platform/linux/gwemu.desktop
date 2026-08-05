@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=GWEmu
+GenericName=Game & Watch Emulator
+Comment=Emulator for the Nintendo Game & Watch (2020)
+Exec=gwemu %f
+Icon=gwemu
+Terminal=false
+Categories=Game;Emulator;
+MimeType=application/octet-stream;

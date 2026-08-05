@@ -1,0 +1,18 @@
+# build output
+build/
+build-static/
+build-win/
+dist/
+*.o
+
+# firmware dumps and disassembly: device-specific and not redistributable
+*.bin
+*.dis
+
+# runtime output. Saves, states and screenshots normally live in the user's
+# data directory; these catch the ones written next to a headless run.
+gw.log
+*.ppm
+*.pgm
+*.sav
+*.st[0-9]

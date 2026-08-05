@@ -1,0 +1,112 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Both targets are cross-built from one Linux runner. SDL2 is the only
+  # dependency and Dear ImGui is vendored, so there is no toolkit to install
+  # and no second runner to keep in step.
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build g++-mingw-w64-x86-64 \
+            libsdl2-dev libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxss-dev libwayland-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev curl file
+
+      # SDL is built once to open X11, Wayland and the audio servers at
+      # runtime rather than link them, which is what keeps a static binary
+      # portable. Windows SDL is a prebuilt download.
+      - name: Cache SDL
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/gwemu-deps
+          key: sdl-${{ hashFiles('src/platform/linux/build-sdl.sh', 'src/platform/windows/build.sh') }}
+
+      - name: Build
+        run: make dist
+
+      - name: Check the Linux binary needs nothing unusual
+        run: |
+          file dist/gwemu-linux-x86_64
+          ldd dist/gwemu-linux-x86_64
+          # Only the C and maths libraries may be linked; SDL and everything
+          # it talks to are either inside the binary or opened at runtime.
+          if ldd dist/gwemu-linux-x86_64 | grep "=>" | \
+             grep -vE "libc\.so|libm\.so|ld-linux"; then
+            echo "::error::the Linux binary links more than the C library"
+            exit 1
+          fi
+
+      - name: Check the Windows binary needs nothing but Windows
+        run: |
+          file dist/gwemu-win64.exe
+          missing=0
+          for dep in $(x86_64-w64-mingw32-objdump -p dist/gwemu-win64.exe | awk '/DLL Name:/ {print $3}'); do
+            if echo "$dep" | grep -qiE "kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|shlwapi|shcore|comdlg32|imm32|winmm|ws2_32|version|setupapi|netapi32|authz|wtsapi32|userenv|uxtheme|dwmapi|dwrite|d3d1[12]|dxgi|msvcrt|ntdll|api-ms-win|rpcrt4|crypt32|cfgmgr32|hid|winspool|opengl32"; then
+              continue
+            fi
+            echo "::error::gwemu.exe needs $dep, which is not part of Windows"
+            missing=1
+          done
+          test "$missing" -eq 0
+
+      - name: Smoke test
+        run: |
+          ./dist/gwemu-linux-x86_64 --help
+          ./dist/gwemu-linux-x86_64 --bogus 2>/dev/null && exit 1 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gwemu
+          path: dist/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gwemu
+          path: dist
+
+      - run: chmod +x dist/gwemu-linux-x86_64 && ls -la dist
+
+      # Uploading to a release that already exists leaves whatever was there
+      # before beside the new files. Clear it so the tag carries exactly the
+      # two binaries this run built and nothing from an earlier one.
+      - name: Clear any existing release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${GITHUB_REF#refs/tags/}
+          gh release delete "$tag" --yes --repo "$GITHUB_REPOSITORY" || true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Firmware dumps are not distributed here. Use a dump from your own
+            unit — see [game-and-watch-backup](https://github.com/ghidraninja/game-and-watch-backup).
+
+            One file per platform, nothing to install.
+
+            - `gwemu-win64.exe` — Windows, 64-bit.
+            - `gwemu-linux-x86_64` — Linux; `chmod +x` and run.

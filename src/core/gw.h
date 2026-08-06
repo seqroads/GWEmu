@@ -182,6 +182,8 @@ void rtc_tick(u32 cycles);
 typedef struct { s32 hour, min, sec, day, month, year, wday; } RtcState;
 void rtc_save_state(RtcState *st);
 void rtc_backup_reset(void);
+/* Factory-fresh backup domain, for opening a firmware in a running process. */
+void periph_new_session(void);
 u32  rcc_get_bdcr(void);
 void rcc_set_bdcr(u32 v);
 void rtc_restore_state(const RtcState *st, u32 elapsed_secs);

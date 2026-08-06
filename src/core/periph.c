@@ -330,10 +330,13 @@ GPIO_PORT(A, 0) GPIO_PORT(B, 1) GPIO_PORT(C, 2) GPIO_PORT(D, 3)
 GPIO_PORT(E, 4) GPIO_PORT(F, 5) GPIO_PORT(G, 6) GPIO_PORT(H, 7)
 GPIO_PORT(I, 8) GPIO_PORT(J, 9) GPIO_PORT(K, 10)
 
+/* Cleared only when a new unit is opened; see periph_new_session. */
+static bool gpio_have_saved;
+
 void gpio_init(void)
 {
     u16 saved[NGPIO];
-    static bool have_saved;
+    bool have_saved = gpio_have_saved;
     for (int i = 0; i < NGPIO; i++) saved[i] = gpios[i].input;
     memset(gpios, 0, sizeof gpios);
     /* Pin levels are driven from outside the chip: they survive a reset. */
@@ -341,7 +344,7 @@ void gpio_init(void)
     /* PC5 is charger detect, active low. The emulated unit is always on the
        charger, so the firmware never shows a flat battery. */
     if (!have_saved) gpios[2].input &= (u16)~(1u << 5);
-    have_saved = true;
+    gpio_have_saved = true;
     periph_register(0x58020000, 0x400, "GPIOA", gpioA_read, gpioA_write);
     periph_register(0x58020400, 0x400, "GPIOB", gpioB_read, gpioB_write);
     periph_register(0x58020800, 0x400, "GPIOC", gpioC_read, gpioC_write);
@@ -1461,8 +1464,16 @@ void rtc_tick(u32 cycles)
         if (++rtc.subsec < pred_s) continue;
         rtc.subsec = 0;
 
-        rtc_advance_second();
-        rtc_encode();
+        /* Following the host means following it for good, not once when the
+           firmware is opened. The firmware sets the calendar itself while it
+           boots, and a restored save carries the time it was saved with, so
+           either would leave a one-off sync reading whatever they wrote. */
+        if (opt_rtc_host) {
+            rtc_sync_host();                  /* encodes as part of setting it */
+        } else {
+            rtc_advance_second();
+            rtc_encode();
+        }
 
         if ((rtc.cr & (1u << 8)) && rtc_alarm_matches(rtc.alrmar)) {   /* ALRAE */
             rtc.sr |= (1u << 0);
@@ -1600,13 +1611,15 @@ void rtc_sync_host(void)
     rtc_encode();
 }
 
+/* Cleared only when a new unit is opened; see periph_new_session. */
+static bool rtc_initialised;
+
 static void rtc_init_state(void)
 {
     /* The RTC lives in the backup domain: it survives the system reset that
        leaving Standby performs, so only initialise it on a cold start. */
-    static bool initialised;
-    if (initialised) return;
-    initialised = true;
+    if (rtc_initialised) return;
+    rtc_initialised = true;
 
     memset(&rtc, 0, sizeof rtc);
     rtc.prer = 0x007F00FF;                    /* 32768 / 128 / 256 = 1 Hz */
@@ -1618,6 +1631,24 @@ static void rtc_init_state(void)
         rtc.day = 1; rtc.month = 1; rtc.year = 21; rtc.wday = 5;
         rtc_encode();
     }
+}
+
+/* Opening a firmware is a different unit, so the battery-backed domain has to
+   start from the factory. periph_init deliberately will not do it - that domain
+   is meant to survive the system reset leaving Standby performs - so a process
+   opening a second firmware would otherwise carry the first one's clock and
+   backup registers into it, and boot down a path real hardware never takes. */
+void periph_new_session(void)
+{
+    /* Pin levels are driven from outside the chip, so gpio_init keeps them
+       across a reset. Across a session they must not survive: closing while
+       the autostart tap still holds POWER would carry a pressed button into
+       the next unit, which then boots already on and reads the next tap as a
+       request to switch off. */
+    gpio_have_saved = false;
+    rtc_initialised = false;
+    memset(tamp_bkp, 0, sizeof tamp_bkp);
+    memset(tamp_regs, 0, sizeof tamp_regs);
 }
 
 /* A backup-domain reset returns the clock and backup registers to the state of

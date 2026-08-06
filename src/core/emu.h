@@ -56,6 +56,13 @@ bool emu_power_off_and_wait(void);
 bool emu_load_nvram(const char *path);
 void emu_save_nvram(const char *path);
 
+/* The same bytes without a filesystem, for a frontend that has no files -
+   the browser one keeps them in IndexedDB. state_save_mem returns the size it
+   needs and only writes when cap is at least that. */
+u32  state_blob_size(void);
+u32  state_save_mem(void *dst, u32 cap);
+bool state_load_mem(const void *src, u32 len);
+
 const u32 *emu_framebuffer(void);       /* ARGB8888 */
 int  emu_fb_width(void);
 int  emu_fb_height(void);

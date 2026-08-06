@@ -31,6 +31,38 @@ work, including the sticks and triggers; rebind anything under Config ▸ Input.
 fullscreen. Save data, save states and screenshots live in the platform's
 user-data directory, keyed by a hash of the firmware so two dumps never collide.
 
+## In a browser
+
+**[Play it here](https://seqroads.github.io/GWEmu/)** — bring your own dump.
+
+The same core compiles to WebAssembly and runs in a tab, with no install and
+nothing uploaded: the dump is read locally, kept in the browser's own storage,
+and never sent anywhere. It reaches full speed on ordinary hardware — the
+interpreter measures 1.8x real time in WebAssembly against 2.5x native on the
+same machine.
+
+```sh
+make serve        # builds dist/web and serves it at http://localhost:8000
+make web          # just build, into dist/web/
+```
+
+`dist/web` is static files and can be published anywhere; it needs no headers
+and no server logic. Building it needs the Emscripten SDK, which
+[src/web/build.sh](src/web/build.sh) explains how to install and finds by
+itself once it is there.
+
+Drop both flash images onto the page or pick them with the button. The unit
+powers itself on, as it does natively, and keyboard and gamepad use the same
+controls as the desktop build. Save data persists in IndexedDB, keyed by the
+same firmware hash the desktop build uses, so two dumps never collide;
+*Settings ▸ Erase everything* clears it. The clock follows the computer's,
+which a tab wants rather than a battery-backed time of its own.
+
+The emulator runs in a Web Worker and draws through WebGL on an OffscreenCanvas
+where the browser has one, so a slow frame stutters the game rather than
+freezing the page. Browsers without OffscreenCanvas take posted frames and draw
+them on the page instead.
+
 ## Building
 
 SDL2 is the only dependency, and Dear ImGui is vendored, so there is no toolkit

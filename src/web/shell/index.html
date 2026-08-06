@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GWEmu — Game &amp; Watch in the browser</title>
+<meta name="description" content="An emulator for the Nintendo Game &amp; Watch (2020), running unmodified factory firmware in the browser.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='23' text-anchor='middle' font-family='system-ui,sans-serif' font-size='19' font-weight='700' letter-spacing='-1' fill='%238b93a3'>GW</text></svg>">
+</head>
+<body>
+
+<header id="bar">
+    <div class="brand">GW<span>Emu</span></div>
+
+    <div class="group">
+        <button id="btn-open" class="primary">Load firmware</button>
+        <button id="btn-power" disabled title="The POWER button on the side">Power</button>
+        <button id="btn-reset" disabled title="Ctrl+R">Reset</button>
+    </div>
+
+    <div class="group right">
+        <button id="btn-full" disabled title="F11">Fullscreen</button>
+        <button id="btn-input">Input</button>
+    </div>
+</header>
+
+<main id="stage">
+    <canvas id="screen" width="320" height="240"></canvas>
+
+    <div id="welcome" class="overlay">
+        <div class="card">
+            <h1>Game &amp; Watch Emulator</h1>
+            <p>
+                This runs the <strong>unmodified factory firmware</strong> from a real
+                Super Mario Bros. or Zelda Game &amp; Watch on an emulated STM32H7B0.
+                No firmware is distributed here — bring a dump from your own unit.
+            </p>
+            <p class="dim">
+                A dump is two files: a <strong>128 KiB</strong> internal flash image and a
+                <strong>1 or 4 MiB</strong> external flash image. Drop both in, or pick them
+                below. They stay in your browser and are never uploaded.
+            </p>
+            <div class="actions">
+                <button id="btn-open2" class="primary big">Choose firmware files</button>
+            </div>
+            <p class="dim tiny">
+                Or drag the two <code>.bin</code> files anywhere onto this page.
+                See <a href="https://github.com/ghidraninja/game-and-watch-backup" target="_blank" rel="noopener">game-and-watch-backup</a>
+                for how to read your unit.
+            </p>
+        </div>
+    </div>
+
+    <div id="drop" class="overlay drop hidden"><div class="card">Drop the firmware images</div></div>
+    <div id="toast" class="toast"></div>
+</main>
+
+<aside id="input-panel" class="panel hidden">
+    <header>
+        <h2>Input</h2>
+        <button id="btn-close-input" class="icon" aria-label="Close">×</button>
+    </header>
+
+    <div class="scroll">
+        <div id="binds" class="binds"></div>
+    </div>
+</aside>
+
+<input type="file" id="file" accept=".bin,application/octet-stream" multiple hidden>
+
+<script type="module" src="main.js"></script>
+<noscript><p style="padding:2rem">This emulator needs JavaScript and WebAssembly.</p></noscript>
+</body>
+</html>

@@ -187,6 +187,7 @@ bool emu_open(const EmuFirmware *fw)
     if (fw->core_hz) opt_core_hz = fw->core_hz;
     opt_rtc_host = fw->rtc_host;
 
+    periph_new_session();
     bus_init_mem(fw->int_data, fw->int_len, fw->ext_data, fw->ext_len);
     if (opt_profile) cpu_profile_init();
     periph_init();

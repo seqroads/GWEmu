@@ -76,6 +76,68 @@ jobs:
           name: gwemu
           path: dist/*
 
+  # The browser build is static files and nothing else: no headers to set and
+  # no server logic, which is what lets Pages host it as it stands. It carries
+  # no SharedArrayBuffer on purpose, since that would want COOP and COEP
+  # headers Pages cannot send.
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned rather than tracking latest: the toolchain decides how the
+      # interpreter is compiled, and it should not change under the project
+      # without someone choosing it.
+      - name: Cache Emscripten
+        id: emsdk
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-6.0.6
+
+      - name: Install Emscripten
+        if: steps.emsdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk ~/emsdk
+          ~/emsdk/emsdk install 6.0.6
+          ~/emsdk/emsdk activate 6.0.6
+
+      # src/web/build.sh finds ~/emsdk by itself, and syntax-checks the shell
+      # with the node Emscripten brings along.
+      - name: Build
+        run: make web
+
+      - name: Check the page is self-contained
+        run: |
+          test -s dist/web/gwcore.wasm
+          # Nothing may be fetched from another host: a strict origin is the
+          # whole security story here, and a dump never leaves the browser.
+          if grep -rEho "https?://[^\"' )]+" dist/web/*.js dist/web/*.html |
+             grep -vE "github\.com|w3\.org|localhost"; then
+            echo "::error::the page references an external host"
+            exit 1
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/web
+
+  # Only from main, and only on this repository, so a fork's push cannot try
+  # to publish to a Pages site it does not own.
+  deploy-pages:
+    needs: web
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
